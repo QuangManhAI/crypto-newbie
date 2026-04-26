@@ -1,0 +1,196 @@
+3.2. THIET KE HE THONG
+
+3.2.1. Muc tieu he thong
+He thong duoc thiet ke de minh hoa day du 4 nhom ky thuat mat ma co ban trong mot chuong trinh Rust tu cai dat (khong su dung thu vien mat ma ben ngoai), gom:
+1. Ma hoa doi xung (AES-128).
+2. Mat ma bat doi xung nen ECC (duong cong elliptic va trao doi khoa ECDH).
+3. Ham bam SHA-256.
+4. Chu ky so Schnorr (ky va xac minh).
+
+Muc tieu cua thiet ke khong nham toi toi uu hieu nang production, ma tap trung vao tinh dung thuat toan, tinh de hieu va tinh dong bo giua ly thuyet va ma nguon.
+
+3.2.2. Kien truc tong the
+He thong duoc to chuc theo mo hinh module hoa trong mot binary crate Rust. Moi module phu trach mot chuc nang ro rang:
+1. src/aes.rs: Thuc hien AES-128 encrypt/decrypt tren chuoi dau vao.
+2. src/sha256.rs: Tu cai dat SHA-256, xuat ket qua bam dang hex.
+3. src/ecc.rs: Cung cap phep toan ECC co ban (diem, cong diem, nhan vo huong), sinh curve ca nhan, sinh cap khoa.
+4. src/exchange_key.rs: Xay dung quy trinh ECDH dua tren module ECC de tao shared secret va session key.
+5. src/schnorr.rs: Thuc hien Schnorr keygen, sign, verify su dung ECC + SHA-256.
+6. src/main.rs: Module dieu phoi, goi lan luot cac demo va in ket qua.
+
+Tuong tac tong quan:
+1. main.rs nhan du lieu mau va goi cac module.
+2. aes.rs xu ly ma hoa doi xung doc lap.
+3. ecc.rs la tang nen cho exchange_key.rs va schnorr.rs.
+4. sha256.rs duoc tai su dung boi ecc.rs, exchange_key.rs, schnorr.rs.
+
+3.2.3. Thiet ke module chi tiet
+
+3.2.3.1. Module SHA-256 (src/sha256.rs)
+Chuc nang:
+1. Tien xu ly thong diep (padding, append length).
+2. Tao message schedule 64 tu 32-bit.
+3. Nen tung block voi 64 vong lap va bo hang so K.
+4. Tra ve chuoi hash 256-bit dang hex.
+
+Du lieu vao/ra:
+1. Input: &[u8].
+2. Output: String hex 64 ky tu.
+
+Vai tro trong he thong:
+1. Bam thong diep co ban.
+2. Tao seed xac dinh cho curve, private key, nonce.
+3. Derive session key trong ECDH.
+
+3.2.3.2. Module ECC (src/ecc.rs)
+Du lieu cot loi:
+1. Point: Infinity hoac Finite {x, y}.
+2. Curve: p, a, b, g, n.
+
+Chuc nang:
+1. So hoc modulo: cong, tru, nhan, nghich dao modulo.
+2. Kiem tra diem nam tren duong cong.
+3. Cong diem ECC.
+4. Nhan vo huong kP bang double-and-add.
+5. Tao curve ca nhan theo seed (MSSV + ho ten) thong qua SHA-256.
+6. Tim generator va bac diem (order).
+7. Sinh private key xac dinh va public key Q = dG.
+
+Y nghia thiet ke:
+1. Tach ECC thanh tang nen de tai su dung.
+2. Dam bao tinh xac dinh: cung input thi ra cung curve va cung khoa.
+3. De mo rong sang ECDSA/ECIES trong cac buoc phat trien tiep theo.
+
+3.2.3.3. Module trao doi khoa ECDH (src/exchange_key.rs)
+Chuc nang:
+1. Sinh keypair cho tung vai tro (Alice/Bob) tu seed rieng.
+2. Xac thuc public key (khong Infinity, nam tren curve).
+3. Tinh shared secret:
+	S_A = dA * QB
+	S_B = dB * QA
+4. Kiem tra S_A = S_B.
+5. Bam toa doam shared secret bang SHA-256 de tao session key.
+
+Du lieu vao/ra:
+1. Input: mssv, full_name.
+2. Output: Bao cao text gom curve, keypair, shared secret, session key.
+
+Y nghia:
+1. Minh hoa tinh chat mat ma bat doi xung trong trao doi khoa.
+2. Cung cap khoa phien cho ung dung doi xung (mo hinh hybrid cryptography).
+
+3.2.3.4. Module AES-128 (src/aes.rs)
+Chuc nang:
+1. Key schedule 10 rounds tu khoa 128-bit.
+2. Encrypt block voi 4 buoc round: SubBytes, ShiftRows, MixColumns, AddRoundKey.
+3. Decrypt block voi cac phep nghich dao tuong ung.
+4. Ho tro chuoi nhieu block (padding PKCS-style).
+5. In block cipher dang ma tran hex.
+
+Du lieu vao/ra:
+1. Input encrypt: plaintext &str, key &str.
+2. Output encrypt: Vec<State> (moi State la ma tran 4x4 byte).
+3. Input decrypt: Vec<State>, key &str.
+4. Output decrypt: plaintext String.
+
+Y nghia:
+1. Minh hoa khoi ma doi xung hoat dong thuc te.
+2. Cho thay kha nang ket hop voi khoa tu ECDH de tao he hybrid.
+
+3.2.3.5. Module Chu ky so Schnorr (src/schnorr.rs)
+Chuc nang:
+1. Keygen: dung ECC de tao (d, P=dG).
+2. Sign:
+	k = nonce xac dinh tu SHA-256
+	R = kG
+	e = H(R || P || m)
+	s = k + e*d (mod n)
+3. Verify:
+	R' = sG - eP
+	e' = H(R' || P || m)
+	chap nhan neu e' = e.
+
+Rang buoc an toan trong thiet ke:
+1. Kiem tra khoa cong khai hop le truoc khi verify.
+2. Kiem tra mien gia tri cua e, s theo modulo n.
+3. Xu ly truong hop Infinity de tranh ket qua vo nghia.
+
+3.2.4. Thiet ke luong xu ly he thong
+
+3.2.4.1. Luong ma hoa doi xung (AES)
+1. Nhan plaintext va key.
+2. Chia block 16 byte va padding.
+3. Encrypt tung block.
+4. Luu/in cipher text dang hex.
+5. Decrypt nguoc de kiem tra tinh dung.
+
+Du lieu demo:
+1. Key: Nhu Pham Quang Manh.
+2. Plaintext: Truong Dai hoc Giao Thong Van Tai TPHCM.
+
+3.2.4.2. Luong SHA-256
+1. Nhan message byte array.
+2. Tien xu ly message.
+3. Nen qua cac block.
+4. Tra ve digest hex.
+
+3.2.4.3. Luong ECC + ECDH
+1. Tao curve ca nhan tu MSSV va ho ten.
+2. Sinh keypair Alice/Bob.
+3. Trao doi public key.
+4. Tinh shared secret hai phia.
+5. Bam shared secret thanh session key.
+
+3.2.4.4. Luong Schnorr
+1. Sinh keypair Schnorr.
+2. Tao signature tren thong diep.
+3. Verify signature.
+4. Thu nghiem thong diep bi sua de xac minh tinh tu choi.
+
+3.2.5. Thiet ke du lieu va giao dien ham
+He thong uu tien kieu du lieu don gian, de theo doi:
+1. Khoa, thong diep: String hoac &[u8].
+2. Diem ECC: enum Point.
+3. Chu ky Schnorr: struct {e, s}.
+4. AES block: State = [[u8;4];4].
+
+Giao dien ham theo huong ham thuan (function-based API):
+1. sha256(message: &[u8]) -> String.
+2. aes_128_encrypt / aes_128_decrypt.
+3. build_personal_curve, scalar_mul, add_points.
+4. demo_ecdh_exchange.
+5. schnorr_keygen, schnorr_sign, schnorr_verify.
+
+Loi ich thiet ke:
+1. De test don vi.
+2. De thay the module.
+3. De mo rong them tinh nang.
+
+3.2.6. Thiet ke kiem thu va xac thuc tinh dung
+He thong co bo test noi bo trong cac file chinh:
+1. SHA-256: doi chieu vector chuan "abc".
+2. ECC: kiem tra tinh xac dinh cua curve va private key.
+3. ECDH: dam bao tao duoc session key va hai ben dong bo shared secret.
+4. Schnorr: verify dung thong diep, reject khi sua thong diep/chu ky.
+5. AES: xac minh decrypt(encrypt(plaintext)) = plaintext.
+
+Ngoai test tu dong, module main.rs cho phep chay demo thu cong de doi chieu ket qua truc quan.
+
+3.2.7. Rang buoc va gioi han he thong
+Rang buoc:
+1. Khong su dung thu vien mat ma ngoai.
+2. Su dung Rust standard library va ma nguon tu cai dat.
+
+Gioi han hien tai:
+1. ECC dang o muc demo hoc thuat voi truong so nho (de de kiem chung).
+2. Chua co random cryptographic-grade; nhieu thanh phan dung seed xac dinh de tai lap ket qua.
+3. Chua tich hop che do van hanh production (quan ly khoa, secure storage, side-channel hardening).
+
+Huong mo rong:
+1. Nang cap random nguon manh hon cho nonce/key.
+2. Nang cap kich thuoc tham so ECC theo tieu chuan thuc te.
+3. Ket hop ECDH + AES theo giao thuc hybrid day du.
+4. Bo sung benchmark va hardening bao mat.
+
+3.2.8. Ket luan thiet ke
+Thiet ke he thong dat duoc muc tieu chinh cua de tai: trinh bay day du va lien thong 4 nhom ky thuat mat ma (doi xung, bat doi xung, bam, chu ky so) trong mot kien truc module ro rang, de kiem thu va de mo rong. Cach to chuc nay phu hop voi tieu chi hoc thuat "tu cai dat bang tay", dong thoi tao nen tang de phat trien cac kich ban nang cao trong cac phan tiep theo cua tieu luan.

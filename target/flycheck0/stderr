@@ -1,1 +1,8 @@
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.00s
+info: `cargo` is unavailable for the active toolchain
+info: falling back to "/Users/quangmanh/.rustup/toolchains/stable-aarch64-apple-darwin/bin/cargo"
+error: process didn't exit successfully: `rustc -vV` (exit status: 1)
+--- stderr
+error: 'rustc' is not installed for the custom toolchain '/usr'.
+note: this is a custom toolchain, which cannot use `rustup component add`
+help: if you built this toolchain from source, and used `rustup toolchain link`, then you may be able to build the component with `x.py`
+

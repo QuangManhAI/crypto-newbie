@@ -1,5 +1,7 @@
+// tai su dung sha256 tu file sha256.rs - khong can su dung thu vien hash ben ngoai
 use crate::sha256::sha256;
 
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum Point {
 	Infinity,
 	Finite { x: u64, y: u64 },
@@ -13,39 +15,8 @@ pub struct Curve {
 	pub n: u64,
 }
 
-impl Copy for Point {}
-
-impl Clone for Point {
-	fn clone(&self) -> Self {
-		*self
-	}
-}
-
-impl PartialEq for Point {
-	fn eq(&self, other: &Self) -> bool {
-		match (self, other) {
-			(Point::Infinity, Point::Infinity) => true,
-			(Point::Finite { x: x1, y: y1 }, Point::Finite { x: x2, y: y2 }) => {
-				x1 == x2 && y1 == y2
-			}
-			_ => false,
-		}
-	}
-}
-
-impl Eq for Point {}
-
-impl core::fmt::Debug for Point {
-	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-		match self {
-			Point::Infinity => write!(f, "Infinity"),
-			Point::Finite { x, y } => write!(f, "Finite({}, {})", x, y),
-		}
-	}
-}
-
 fn mod_add(a: u64, b: u64, p: u64) -> u64 {
-	((a % p) + (b % p)) % p
+	((a as u128 + b as u128) % p as u128) as u64
 }
 
 fn mod_sub(a: u64, b: u64, p: u64) -> u64 {
@@ -57,6 +28,10 @@ fn mod_mul(a: u64, b: u64, p: u64) -> u64 {
 }
 
 fn mod_inv(a: u64, p: u64) -> Option<u64> {
+	if p == 0 {
+		return None;
+	}
+
 	let mut t = 0i128;
 	let mut new_t = 1i128;
 	let mut r = p as i128;
@@ -65,13 +40,13 @@ fn mod_inv(a: u64, p: u64) -> Option<u64> {
 	while new_r != 0 {
 		let q = r / new_r;
 
-		let temp_t = t - q * new_t;
+		let old_t = t;
 		t = new_t;
-		new_t = temp_t;
+		new_t = old_t - q * new_t;
 
-		let temp_r = r - q * new_r;
+		let old_r = r;
 		r = new_r;
-		new_r = temp_r;
+		new_r = old_r - q * new_r;
 	}
 
 	if r != 1 {
@@ -93,7 +68,7 @@ fn is_prime(n: u64) -> bool {
 	}
 
 	let mut d = 3u64;
-	while d * d <= n {
+	while d <= n / d {
 		if n % d == 0 {
 			return false;
 		}
@@ -128,19 +103,25 @@ fn curve_seed(mssv: &str, full_name: &str, salt: &str) -> String {
 	sha256(input.as_bytes())
 }
 
-fn order_of_point(curve: &Curve, point: Point) -> u64 {
+fn has_valid_discriminant(a: u64, b: u64, p: u64) -> bool {
+	let four_a3 = mod_mul(4, mod_mul(mod_mul(a, a, p), a, p), p);
+	let twenty_seven_b2 = mod_mul(27, mod_mul(b, b, p), p);
+	mod_add(four_a3, twenty_seven_b2, p) != 0
+}
+
+fn point_order(curve: &Curve, point: Point) -> u64 {
 	if point == Point::Infinity {
 		return 1;
 	}
 
-	let mut q = point;
+	let mut acc = point;
 	let mut n = 1u64;
-	let bound = curve.p + 1 + 2 * (curve.p as f64).sqrt() as u64 + 50;
+	let bound = curve.p + 1 + 2 * (curve.p as f64).sqrt() as u64 + 64;
 
 	while n <= bound {
-		q = add_points(curve, q, point);
+		acc = add_points(curve, acc, point);
 		n += 1;
-		if q == Point::Infinity {
+		if acc == Point::Infinity {
 			return n;
 		}
 	}
@@ -155,20 +136,23 @@ fn find_generator(curve: &Curve) -> Option<(Point, u64)> {
 		let rhs = mod_add(mod_add(x3, ax, curve.p), curve.b, curve.p);
 
 		for y in 0..curve.p {
-			if mod_mul(y, y, curve.p) == rhs {
-				let point = Point::Finite { x, y };
-				let n = order_of_point(curve, point);
-				if n > 50 {
-					return Some((point, n));
-				}
+			if mod_mul(y, y, curve.p) != rhs {
+				continue;
+			}
+
+			let point = Point::Finite { x, y };
+			let n = point_order(curve, point);
+			if n > 50 {
+				return Some((point, n));
 			}
 		}
 	}
+
 	None
 }
 
-pub fn is_on_curve(curve: &Curve, p: Point) -> bool {
-	match p {
+pub fn is_on_curve(curve: &Curve, point: Point) -> bool {
+	match point {
 		Point::Infinity => true,
 		Point::Finite { x, y } => {
 			let lhs = mod_mul(y, y, curve.p);
@@ -193,18 +177,18 @@ pub fn add_points(curve: &Curve, p1: Point, p2: Point) -> Point {
 				if y1 == 0 {
 					return Point::Infinity;
 				}
-				let num = mod_add(mod_mul(3, mod_mul(x1, x1, curve.p), curve.p), curve.a, curve.p);
-				let den = mod_mul(2, y1, curve.p);
-				match mod_inv(den, curve.p) {
-					Some(inv) => mod_mul(num, inv, curve.p),
-					None => return Point::Infinity,
+				let numerator = mod_add(mod_mul(3, mod_mul(x1, x1, curve.p), curve.p), curve.a, curve.p);
+				let denominator = mod_mul(2, y1, curve.p);
+				match mod_inv(denominator, curve.p) {
+					Some(inv) => mod_mul(numerator, inv, curve.p),
+					core::option::Option::None => return Point::Infinity,
 				}
 			} else {
-				let num = mod_sub(y2, y1, curve.p);
-				let den = mod_sub(x2, x1, curve.p);
-				match mod_inv(den, curve.p) {
-					Some(inv) => mod_mul(num, inv, curve.p),
-					None => return Point::Infinity,
+				let numerator = mod_sub(y2, y1, curve.p);
+				let denominator = mod_sub(x2, x1, curve.p);
+				match mod_inv(denominator, curve.p) {
+					Some(inv) => mod_mul(numerator, inv, curve.p),
+					core::option::Option::None => return Point::Infinity,
 				}
 			};
 
@@ -222,7 +206,7 @@ pub fn scalar_mul(curve: &Curve, k: u64, point: Point) -> Point {
 	let mut n = k;
 
 	while n > 0 {
-		if n & 1 == 1 {
+		if (n & 1) == 1 {
 			result = add_points(curve, result, addend);
 		}
 		addend = add_points(curve, addend, addend);
@@ -233,7 +217,7 @@ pub fn scalar_mul(curve: &Curve, k: u64, point: Point) -> Point {
 }
 
 pub fn build_personal_curve(mssv: &str, full_name: &str) -> Result<Curve, String> {
-	for attempt in 0..128u64 {
+	for attempt in 0..256u64 {
 		let seed_p = curve_seed(mssv, full_name, &format!("p:{}", attempt));
 		let seed_ab = curve_seed(mssv, full_name, &format!("ab:{}", attempt));
 
@@ -243,13 +227,7 @@ pub fn build_personal_curve(mssv: &str, full_name: &str) -> Result<Curve, String
 		let a = parse_hex_u64_prefix(&seed_ab[0..16], 4) % p;
 		let b = parse_hex_u64_prefix(&seed_ab[16..32], 4) % p;
 
-		let discriminant = mod_add(
-			mod_mul(4, mod_mul(mod_mul(a, a, p), a, p), p),
-			mod_mul(27, mod_mul(b, b, p), p),
-			p,
-		);
-
-		if discriminant == 0 {
+		if !has_valid_discriminant(a, b, p) {
 			continue;
 		}
 
@@ -274,11 +252,13 @@ pub fn build_personal_curve(mssv: &str, full_name: &str) -> Result<Curve, String
 pub fn derive_private_key(curve: &Curve, mssv: &str, full_name: &str) -> u64 {
 	let seed = curve_seed(mssv, full_name, "priv");
 	let raw = parse_hex_u64_prefix(&seed, 8);
-	((raw % (curve.n.saturating_sub(1).max(1))) + 1).min(curve.n.saturating_sub(1).max(1))
+
+	let max_key = curve.n.saturating_sub(1).max(1);
+	(raw % max_key) + 1
 }
 
-pub fn point_to_string(p: Point) -> String {
-	match p {
+pub fn point_to_string(point: Point) -> String {
+	match point {
 		Point::Infinity => "O (Infinity)".to_string(),
 		Point::Finite { x, y } => format!("({}, {})", x, y),
 	}
@@ -293,7 +273,7 @@ pub fn demo_personal_curve(mssv: &str, full_name: &str) -> Result<String, String
 		return Err("Public key khong nam tren duong cong".to_string());
 	}
 
-	let output = format!(
+	Ok(format!(
 		"MSSV: {}\nHo ten: {}\nCurve: y^2 = x^3 + {}x + {} (mod {})\nG: {}\nOrder n: {}\nPrivate d: {}\nPublic Q = dG: {}",
 		mssv,
 		full_name,
@@ -304,9 +284,7 @@ pub fn demo_personal_curve(mssv: &str, full_name: &str) -> Result<String, String
 		curve.n,
 		d,
 		point_to_string(q)
-	);
-
-	Ok(output)
+	))
 }
 
 #[cfg(test)]
@@ -330,5 +308,15 @@ mod tests {
 		let d1 = derive_private_key(&c1, mssv, name);
 		let d2 = derive_private_key(&c2, mssv, name);
 		assert_eq!(d1, d2);
+	}
+
+	#[test]
+	fn generated_public_key_is_on_curve() {
+		let curve = build_personal_curve("067206006852", "Nhu Pham Quang Manh").unwrap();
+		let d = derive_private_key(&curve, "067206006852", "Nhu Pham Quang Manh");
+		let q = scalar_mul(&curve, d, curve.g);
+
+		assert!(q != Point::Infinity);
+		assert!(is_on_curve(&curve, q));
 	}
 }

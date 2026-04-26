@@ -19,7 +19,6 @@ fn derive_party_private_key(curve: &Curve, mssv: &str, full_name: &str, role: &s
 	let digest = sha256(seed_input.as_bytes());
 	let raw = parse_hex_u64_prefix(&digest, 8);
 
-	// Private key must satisfy 1 <= d < n.
 	let n_minus_1 = curve.n.saturating_sub(1).max(1);
 	(raw % n_minus_1) + 1
 }

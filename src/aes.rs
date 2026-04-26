@@ -69,7 +69,6 @@ fn sub_word(word: Word) -> Word {
     result
 }
 
-// process 1 col in key
 fn combine_srword(_word: Word, round: usize) -> Word {
     let mut word = rot_word(_word);
 
@@ -113,7 +112,6 @@ fn prepare_input_to_states(input: &str) -> Vec<State> {
 
     let padding_len = 16 - (bytes.len() % 16);
 
-    // PKCS padding
     for _ in 0..padding_len{
         bytes.push(padding_len as u8);
     }
@@ -341,4 +339,54 @@ pub fn aes_128_decrypt(cipher_states: Vec<State>, key_str: &str) -> String {
     let unpadded_bytes = unpad(plain_bytes);
 
     String::from_utf8_lossy(&unpadded_bytes).into_owned()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{aes_128_decrypt, aes_128_encrypt};
+
+    #[test]
+    fn aes_round_trip_single_block() {
+        let key = "Thats my Kung Fu";
+        let plaintext = "hello aes";
+
+        let cipher = aes_128_encrypt(plaintext, key);
+        let decrypted = aes_128_decrypt(cipher, key);
+
+        assert_eq!(decrypted, plaintext);
+    }
+
+    #[test]
+    fn aes_round_trip_multi_block() {
+        let key = "Nhu Pham Quang Manh";
+        let plaintext = "Truong Dai hoc Giao Thong Van Tai TPHCM";
+
+        let cipher = aes_128_encrypt(plaintext, key);
+        let decrypted = aes_128_decrypt(cipher, key);
+
+        assert_eq!(decrypted, plaintext);
+    }
+
+    #[test]
+    fn aes_encrypt_is_deterministic_with_same_key_and_input() {
+        let key = "Thats my Kung Fu";
+        let plaintext = "same input";
+
+        let c1 = aes_128_encrypt(plaintext, key);
+        let c2 = aes_128_encrypt(plaintext, key);
+
+        assert_eq!(c1, c2);
+    }
+
+    #[test]
+    fn aes_decrypt_with_wrong_key_does_not_match_plaintext() {
+        let key_ok = "Thats my Kung Fu";
+        let key_wrong = "Nhu Pham Quang Manh";
+        let plaintext = "secret message";
+
+        let cipher = aes_128_encrypt(plaintext, key_ok);
+        let decrypted_wrong = aes_128_decrypt(cipher, key_wrong);
+
+        assert_ne!(decrypted_wrong, plaintext);
+    }
 }

@@ -1,0 +1,197 @@
+CHUONG 4: DANH GIA VA DEMO
+
+4.1. Demo he thong
+
+4.1.1. Moi truong demo
+He thong duoc demo tren may macOS ARM64 voi bo cong cu Rust hien hanh. Chuong trinh duoc build va chay truc tiep bang Cargo, khong dung thu vien mat ma ben ngoai.
+
+Cau lenh chay:
+1. cargo check
+2. cargo test -q
+3. cargo run -q
+
+Ket qua kiem tra:
+1. Build thanh cong.
+2. Tat ca test deu pass (7/7).
+3. Chuong trinh in du ket qua demo cho AES, SHA-256, ECC/ECDH va Schnorr.
+
+4.1.2. Du lieu demo
+Du lieu su dung trong demo:
+1. Key AES: Nhu Pham Quang Manh
+2. Plaintext AES: Truong Dai hoc Giao Thong Van Tai TPHCM
+3. Input SHA-256: abc
+4. MSSV: 067206006852
+5. Ho ten: Nhu Pham Quang Manh
+6. Message Schnorr: Schnorr demo message
+
+4.1.3. Demo ma hoa doi xung AES-128
+Quy trinh demo:
+1. Nhap key va plaintext.
+2. Ma hoa thanh cac block cipher 16-byte.
+3. In tung block duoi dang ma tran hex.
+4. Giai ma nguoc va doi chieu ket qua.
+
+Ket qua tieu bieu:
+1. Cipher duoc sinh ra thanh 3 block hex.
+2. Ket qua giai ma thu duoc dung nguyen van:
+	Truong Dai hoc Giao Thong Van Tai TPHCM
+
+Nhan xet:
+1. Luong encrypt/decrypt hoat dong dung cho thong diep da cho.
+2. Padding va bo qua padding khi giai ma hoat dong dung.
+
+4.1.4. Demo SHA-256
+Quy trinh demo:
+1. Bam chuoi "abc".
+2. Doi chieu voi test vector chuan.
+
+Ket qua:
+SHA-256("abc") =
+ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad
+
+Nhan xet:
+1. Trung khop test vector chuan.
+2. Chung minh module SHA-256 cai dat dung.
+
+4.1.5. Demo ECC va ECDH
+Quy trinh demo:
+1. Tao personal curve tu MSSV + ho ten.
+2. Sinh private/public key.
+3. Tao keypair Alice/Bob va tinh shared secret ECDH.
+4. Bam shared secret thanh session key.
+
+Ket qua tieu bieu:
+1. Curve: y^2 = x^3 + 242x + 1603 (mod 2707)
+2. Generator G: (1, 856), Order n: 2725
+3. Shared secret hai ben giong nhau: (2458, 1813)
+4. Session key SHA-256:
+	91ac3abbcec0f66abc34953a8f726e9ddfc5b2c023b9ae39d7849c20b8f3f10d
+
+Nhan xet:
+1. ECDH dung tinh chat doi xung chia se bi mat (S_A = S_B).
+2. Session key co the dung de cap khoa cho ma hoa doi xung.
+
+4.1.6. Demo Schnorr signature
+Quy trinh demo:
+1. Sinh cap khoa Schnorr tu curve ECC.
+2. Ky thong diep bang khoa bi mat.
+3. Verify bang khoa cong khai.
+4. Kiem thu truong hop sua thong diep/sua chu ky.
+
+Ket qua tieu bieu:
+1. Signature (e, s): (1864, 663)
+2. Verify voi thong diep goc: true
+3. Verify voi thong diep bi thay doi: false (qua test)
+
+Nhan xet:
+1. Co che ky va xac minh hoat dong dung.
+2. He thong co kha nang phat hien thong diep bi chinh sua.
+
+
+4.2. Danh gia hieu nang
+
+4.2.1. Tieu chi danh gia
+He thong duoc danh gia theo cac tieu chi:
+1. Dung thuat toan (correctness).
+2. Thoi gian xu ly voi du lieu nho-vua (do phuc tap du de demo).
+3. Tai su dung module.
+4. Kha nang mo rong.
+
+4.2.2. Danh gia dinh tinh theo tung thanh phan
+1. AES-128:
+	Do phuc tap theo so block du lieu.
+	Rat phu hop cho ma hoa khoi luong du lieu lon hon cac phuong phap bat doi xung.
+
+2. SHA-256:
+	Xu ly theo block 512-bit, mo rong tot theo do dai thong diep.
+	Toc do nhanh va on dinh cho bam thong diep va tao seed.
+
+3. ECC/ECDH:
+	Chi phi tinh toan tap trung o phep nhan vo huong diem.
+	Toc do cham hon AES/SHA, nhung phu hop vai tro trao doi khoa.
+
+4. Schnorr:
+	Chi phi ky va verify dua tren ECC + SHA-256.
+	Nhanh hon so voi nhieu co che RSA cung muc do an toan khi xet tren tham so lon (ve ly thuyet).
+
+4.2.3. Danh gia ket qua thuc nghiem trong de tai
+Ket qua chay tren bo du lieu demo:
+1. cargo check: thanh cong.
+2. cargo test -q: 7/7 test pass.
+3. Luong demo end-to-end chay mot lan, ra ket qua day du cho 4 module.
+
+Voi pham vi do an hoc thuat, he thong dat yeu cau hieu nang co ban:
+1. Phan hoi nhanh voi input ngan.
+2. Khong bi loi runtime trong cac kich ban demo va test don vi.
+
+4.2.4. Danh gia do phuc tap ly thuyet
+1. AES: O(n) theo kich thuoc du lieu (n byte), voi moi block co so round co dinh.
+2. SHA-256: O(n) theo kich thuoc thong diep.
+3. ECDH/Schnorr: phu thuoc phep nhan vo huong diem, xap xi O(log k) cho moi scalar nhan theo double-and-add.
+
+
+4.3. So sanh cac phuong phap
+
+4.3.1. So sanh theo muc dich
+1. AES-128:
+	Muc dich: Bao mat noi dung du lieu (confidentiality).
+	Kieu khoa: Doi xung.
+	Ung dung: Ma hoa luong du lieu.
+
+2. ECC/ECDH:
+	Muc dich: Trao doi khoa an toan qua kenh cong khai.
+	Kieu khoa: Bat doi xung.
+	Ung dung: Thiet lap session key cho he hybrid.
+
+3. SHA-256:
+	Muc dich: Toan ven du lieu, tao digest, tao seed.
+	Kieu: Ham mot chieu, khong giai ma.
+	Ung dung: Bam thong diep, tao challenge/nonce/key material.
+
+4. Schnorr:
+	Muc dich: Xac thuc nguon goc va chong choi bo (authenticity, non-repudiation).
+	Kieu: Chu ky so tren nen ECC.
+	Ung dung: Ky thong diep, verify thong diep.
+
+4.3.2. So sanh theo hieu nang va vai tro
+1. AES nhanh nhat cho ma hoa khoi du lieu.
+2. SHA-256 nhanh va don gian de ket hop voi module khac.
+3. ECC/ECDH cham hon AES nhung manh o bai toan quan ly khoa.
+4. Schnorr co chi phi ky/verify cao hon hash, thap hon ma hoa bat doi xung tren du lieu lon; phu hop vai tro chu ky.
+
+4.3.3. Kha nang ket hop thanh he thong hybrid
+Mo hinh ket hop toi uu trong de tai:
+1. Dung ECC/ECDH de trao doi session key.
+2. Dung AES de ma hoa du lieu chinh.
+3. Dung SHA-256 de bam va tao material trung gian.
+4. Dung Schnorr de ky va xac minh toan ven + xac thuc.
+
+Mo hinh tren tan dung uu diem tung nhom thuat toan va han che nhuoc diem cua tung nhom khi dung don le.
+
+
+4.4. Nhan xet
+
+4.4.1. Ket qua dat duoc
+1. Hoan thanh day du 4 nhom ky thuat mat ma theo yeu cau de tai.
+2. Tat ca thuat toan duoc cai dat thu cong bang Rust, khong dung thu vien mat ma ngoai.
+3. He thong module hoa ro rang, de test, de demo va de mo rong.
+4. Cac kiem thu don vi va demo thuc te deu cho ket qua dung.
+
+4.4.2. Uu diem
+1. Tinh hoc thuat cao: the hien ro nguyen ly tung thuat toan.
+2. Tinh lien thong tot: SHA-256 duoc tai su dung o nhieu module; ECC lam nen cho ECDH va Schnorr.
+3. De bao tri: moi file mot vai tro ro rang.
+
+4.4.3. Han che
+1. Tham so ECC nho de phu hop muc tieu minh hoa, chua huong production.
+2. Nonce va seed theo huong xac dinh de de tai lap, chua la nguon ngau nhien cryptographic-grade.
+3. Chua tich hop day du cac co che bao ve side-channel va quan ly khoa an toan nhu he thong thuc te.
+
+4.4.4. Huong phat trien
+1. Nang cap tham so ECC theo bo tham so tieu chuan.
+2. Bo sung benchmark tu dong (thong ke thoi gian encrypt/sign/verify theo kich thuoc du lieu).
+3. Xay dung flow hybrid day du theo kieu: ECDH -> AES session encryption -> Schnorr signature.
+4. Bo sung giao dien demo (CLI nang cao hoac web) de thao tac va quan sat ket qua truc quan hon.
+
+4.4.5. Ket luan chuong
+Chuong nay cho thay he thong da dat yeu cau ve demo va danh gia co ban cho mot de tai hoc thuat ve mat ma. Viec ket hop AES, ECC/ECDH, SHA-256 va Schnorr tao thanh mot mo hinh tong hop hop ly, vua dam bao tinh ly thuyet vua co kha nang trien khai mo rong trong cac buoc nghien cuu tiep theo.

@@ -1,0 +1,211 @@
+PSEUDO CODE CHO 4 THUAT TOAN
+
+1) AES-128 (DOI XUNG)
+
+1.1 KeyExpansion
+Input: key[16 bytes]
+Output: round_keys[11][4][4]
+
+Procedure KeyExpansion(key):
+	round_keys[0] <- key as 4x4 state
+	for round from 1 to 10:
+		temp <- last_column(round_keys[round-1])
+		temp <- RotWord(temp)
+		temp <- SubWord(temp)
+		temp[0] <- temp[0] XOR RCON[round]
+
+		round_keys[round].col0 <- round_keys[round-1].col0 XOR temp
+		for col from 1 to 3:
+			round_keys[round].col[col] <- round_keys[round].col[col-1] XOR round_keys[round-1].col[col]
+	return round_keys
+
+1.2 Encrypt
+Input: plaintext, key
+Output: ciphertext_blocks
+
+Procedure AES_Encrypt(plaintext, key):
+	blocks <- PKCS_Pad_And_Split(plaintext, 16)
+	round_keys <- KeyExpansion(key)
+	result <- []
+
+	for each block in blocks:
+		state <- block
+		state <- AddRoundKey(state, round_keys[0])
+
+		for r from 1 to 9:
+			state <- SubBytes(state)
+			state <- ShiftRows(state)
+			state <- MixColumns(state)
+			state <- AddRoundKey(state, round_keys[r])
+
+		state <- SubBytes(state)
+		state <- ShiftRows(state)
+		state <- AddRoundKey(state, round_keys[10])
+
+		append state to result
+
+	return result
+
+1.3 Decrypt
+Input: ciphertext_blocks, key
+Output: plaintext
+
+Procedure AES_Decrypt(ciphertext_blocks, key):
+	round_keys <- KeyExpansion(key)
+	bytes_out <- []
+
+	for each block in ciphertext_blocks:
+		state <- block
+		state <- AddRoundKey(state, round_keys[10])
+		state <- InvShiftRows(state)
+		state <- InvSubBytes(state)
+
+		for r from 9 downto 1:
+			state <- AddRoundKey(state, round_keys[r])
+			state <- InvMixColumns(state)
+			state <- InvShiftRows(state)
+			state <- InvSubBytes(state)
+
+		state <- AddRoundKey(state, round_keys[0])
+		append state bytes to bytes_out
+
+	return PKCS_Unpad(bytes_out)
+
+
+2) ECC (BAT DOI XUNG)
+
+2.1 Cong diem tren duong cong
+Input: curve(p,a,b), P, Q
+Output: R = P + Q
+
+Procedure ECC_Add(curve, P, Q):
+	if P = Infinity: return Q
+	if Q = Infinity: return P
+
+	if Px = Qx and (Py + Qy) mod p = 0:
+		return Infinity
+
+	if P = Q:
+		lambda <- (3*Px^2 + a) * inv_mod(2*Py, p) mod p
+	else:
+		lambda <- (Qy - Py) * inv_mod(Qx - Px, p) mod p
+
+	Rx <- lambda^2 - Px - Qx mod p
+	Ry <- lambda*(Px - Rx) - Py mod p
+	return (Rx, Ry)
+
+2.2 Nhan vo huong
+Input: curve, k, P
+Output: kP
+
+Procedure ECC_ScalarMul(curve, k, P):
+	result <- Infinity
+	addend <- P
+	n <- k
+
+	while n > 0:
+		if n is odd:
+			result <- ECC_Add(curve, result, addend)
+		addend <- ECC_Add(curve, addend, addend)
+		n <- n >> 1
+
+	return result
+
+2.3 Sinh khoa
+Input: curve with generator G and order n
+Output: private d, public Q
+
+Procedure ECC_KeyGen(curve):
+	d <- random integer in [1, n-1]
+	Q <- ECC_ScalarMul(curve, d, G)
+	return (d, Q)
+
+
+3) SHA-256 (HAM BAM)
+
+Input: message bytes
+Output: digest 256-bit (hex)
+
+Procedure SHA256(message):
+	H <- initial_hash_constants[8]
+	K <- round_constants[64]
+
+	M <- Preprocess(message)
+	// Preprocess:
+	// 1) append bit '1'
+	// 2) append '0' bits until length mod 512 = 448
+	// 3) append original length as 64-bit big-endian
+
+	for each 512-bit block B in M:
+		W[0..15] <- parse B into 16 words (32-bit)
+		for t from 16 to 63:
+			W[t] <- sigma1(W[t-2]) + W[t-7] + sigma0(W[t-15]) + W[t-16]
+
+		a,b,c,d,e,f,g,h <- H
+
+		for t from 0 to 63:
+			T1 <- h + BigSigma1(e) + Ch(e,f,g) + K[t] + W[t]
+			T2 <- BigSigma0(a) + Maj(a,b,c)
+
+			h <- g
+			g <- f
+			f <- e
+			e <- d + T1
+			d <- c
+			c <- b
+			b <- a
+			a <- T1 + T2
+
+		H[0] <- H[0] + a
+		H[1] <- H[1] + b
+		H[2] <- H[2] + c
+		H[3] <- H[3] + d
+		H[4] <- H[4] + e
+		H[5] <- H[5] + f
+		H[6] <- H[6] + g
+		H[7] <- H[7] + h
+
+	return concat_hex(H[0..7])
+
+
+4) SCHNORR SIGNATURE
+
+4.1 KeyGen
+Input: curve(G, n)
+Output: private key d, public key P
+
+Procedure Schnorr_KeyGen(curve):
+	d <- random integer in [1, n-1]
+	P <- d * G
+	return (d, P)
+
+4.2 Sign
+Input: curve, private d, public P, message m
+Output: signature (e, s)
+
+Procedure Schnorr_Sign(curve, d, P, m):
+	k <- deterministic_or_random_nonce in [1, n-1]
+	R <- k * G
+	e <- H(Rx || Ry || Px || Py || m) mod n
+	s <- (k + e*d) mod n
+	return (e, s)
+
+4.3 Verify
+Input: curve, public P, message m, signature (e, s)
+Output: true/false
+
+Procedure Schnorr_Verify(curve, P, m, (e,s)):
+	if P invalid or e,s out of range: return false
+
+	R' <- s*G - e*P
+	e' <- H(R'x || R'y || Px || Py || m) mod n
+
+	if e' = e: return true
+	else: return false
+
+
+TOM TAT VAI TRO 4 THUAT TOAN TRONG HE THONG
+1) AES: bao mat du lieu (confidentiality)
+2) ECC: nen bat doi xung va trao doi khoa
+3) SHA-256: bam va tao digest/key material
+4) Schnorr: xac thuc va toan ven thong diep

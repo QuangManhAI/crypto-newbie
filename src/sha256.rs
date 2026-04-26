@@ -14,7 +14,6 @@ fn small_sigma_1(x: u32) -> u32 {
     x.rotate_right(17) ^ x.rotate_right(19) ^ (x >> 10)
 }
 
-// FIX: ham nay phai tra ve u32 de dung trong tinh t1.
 fn ch(x: u32, y: u32, z: u32) -> u32 {
     (x & y) ^ ((!x) & z)
 }
@@ -23,7 +22,6 @@ fn maj(x: u32, y: u32, z: u32) -> u32 {
     (x & y) ^ (x & z) ^ (y & z)
 }
 
-// FIX: sua logic kiem tra prime (khong chia toi n, bo qua so chan, chi toi sqrt(n)).
 fn is_prime(n: u32) -> bool {
     if n < 2 {
         return false;
@@ -51,7 +49,6 @@ fn get_n_primes(n: usize) -> Vec<u32> {
     let mut candidate = 2u32;
 
     while primes.len() < n {
-        // FIX: ten ham dung la is_prime (khong phai is_primes).
         if is_prime(candidate) {
             primes.push(candidate);
         }
@@ -60,7 +57,6 @@ fn get_n_primes(n: usize) -> Vec<u32> {
     primes
 }
 
-// FIX: doi ten bien typo srqt/sqrt va tra ve h dung.
 fn compute_initial_hash() -> [u32; 8] {
     let primes = get_n_primes(8);
     let mut h = [0u32; 8];
@@ -84,12 +80,10 @@ fn compute_k_constants() -> [u32; 64] {
         k[i] = (fractional_part * (2f64.powi(32))) as u32;
     }
 
-    // FIX: ham tra ve mang k thay vi ket thuc khong return.
     k
 }
 
 fn pad_message(message: &[u8]) -> Vec<u8> {
-    // FIX: dung dung ten bien message/padded (khong phai mess/paddef).
     let mut padded = message.to_vec();
 
     padded.push(0x80);
@@ -101,12 +95,10 @@ fn pad_message(message: &[u8]) -> Vec<u8> {
 }
 
 fn append_length(mut padded_message: Vec<u8>, original_bit_len: u64) -> Vec<u8> {
-    // FIX: dung API extend_from_slice.
     padded_message.extend_from_slice(&original_bit_len.to_be_bytes());
     padded_message
 }
 
-// FIX: parse ve block co kich thuoc co dinh [u32;16] de dong nhat voi message schedule.
 fn parse_into_blocks(full_padded_message: &[u8]) -> Vec<[u32; 16]> {
     full_padded_message
         .chunks_exact(64)
@@ -136,11 +128,9 @@ fn preprocess(message: &[u8]) -> Vec<[u32; 16]> {
 fn extend_message_schedule(m_block: &[u32; 16]) -> [u32; 64] {
     let mut w = [0u32; 64];
 
-    // FIX: copy 16 tu dau tu block u32 thay vi gan u8 vao u32.
     w[..16].copy_from_slice(m_block);
 
     for t in 16..64 {
-        // FIX: dung dung ten ham sigma co dau _.
         w[t] = small_sigma_1(w[t - 2])
             .wrapping_add(w[t - 7])
             .wrapping_add(small_sigma_0(w[t - 15]))
@@ -161,7 +151,6 @@ fn compress_block(w: &[u32; 64], k: &[u32; 64], h_current: &mut [u32; 8]) {
     let mut h = h_current[7];
 
     for t in 0..64 {
-        // FIX: dung dung ten ham big_sigma_1, big_sigma_0 va ch tra ve u32.
         let t1 = h
             .wrapping_add(big_sigma_1(e))
             .wrapping_add(ch(e, f, g))

@@ -34,6 +34,15 @@ fn parse_hex_u64_prefix(hex: &str, bytes: usize) -> u64 {
 	u64::from_str_radix(clipped, 16).unwrap_or(0)
 }
 
+fn hash_to_scalar(material: &str, n: u64) -> u64 {
+	if n <= 1 {
+		return 0;
+	}
+
+	let digest = sha256(material.as_bytes());
+	parse_hex_u64_prefix(&digest, 8) % n
+}
+
 fn point_xy(point: Point) -> Result<(u64, u64), String> {
 	match point {
 		Point::Finite { x, y } => Ok((x, y)),
@@ -41,29 +50,26 @@ fn point_xy(point: Point) -> Result<(u64, u64), String> {
 	}
 }
 
-fn hash_to_scalar(input: &str, n: u64) -> u64 {
-	if n <= 1 {
-		return 0;
-	}
-	let digest = sha256(input.as_bytes());
-	parse_hex_u64_prefix(&digest, 8) % n
-}
-
 fn challenge_scalar(r: Point, public_key: Point, message: &[u8], n: u64) -> Result<u64, String> {
 	let (rx, ry) = point_xy(r)?;
 	let (px, py) = point_xy(public_key)?;
-	let msg = String::from_utf8_lossy(message);
-	let material = format!("{}|{}|{}|{}|{}", rx, ry, px, py, msg);
+	let message_str = String::from_utf8_lossy(message);
+	let material = format!("SCHNORR_CHALLENGE|{}|{}|{}|{}|{}", rx, ry, px, py, message_str);
 
 	Ok(hash_to_scalar(&material, n))
 }
 
-fn deterministic_nonce(curve: &Curve, private_key: u64, message: &[u8]) -> u64 {
-	let msg = String::from_utf8_lossy(message);
-	let material = format!("SCHNORR_NONCE|{}|{}", private_key, msg);
+fn deterministic_nonce(curve: &Curve, private_key: u64, public_key: Point, message: &[u8]) -> u64 {
+	if curve.n <= 1 {
+		return 0;
+	}
+
+	let message_str = String::from_utf8_lossy(message);
+	let pk = point_to_string(public_key);
+	let material = format!("SCHNORR_NONCE|{}|{}|{}", private_key, pk, message_str);
 	let mut k = hash_to_scalar(&material, curve.n);
 
-	if curve.n > 1 && k == 0 {
+	if k == 0 {
 		k = 1;
 	}
 
@@ -72,33 +78,50 @@ fn deterministic_nonce(curve: &Curve, private_key: u64, message: &[u8]) -> u64 {
 
 pub fn schnorr_keygen(mssv: &str, full_name: &str) -> Result<(Curve, SchnorrKeyPair), String> {
 	let curve = build_personal_curve(mssv, full_name)?;
-	let d = derive_private_key(&curve, mssv, full_name);
-	let p = scalar_mul(&curve, d, curve.g);
+	let private_key = derive_private_key(&curve, mssv, full_name);
+	let public_key = scalar_mul(&curve, private_key, curve.g);
 
-	if !is_on_curve(&curve, p) || p == Point::Infinity {
+	if public_key == Point::Infinity || !is_on_curve(&curve, public_key) {
 		return Err("Public key Schnorr khong hop le".to_string());
 	}
 
 	Ok((
 		curve,
 		SchnorrKeyPair {
-			private_key: d,
-			public_key: p,
+			private_key,
+			public_key,
 		},
 	))
 }
 
-pub fn schnorr_sign(curve: &Curve, private_key: u64, public_key: Point, message: &[u8]) -> Result<SchnorrSignature, String> {
+pub fn schnorr_sign(
+	curve: &Curve,
+	private_key: u64,
+	public_key: Point,
+	message: &[u8],
+) -> Result<SchnorrSignature, String> {
 	if curve.n <= 1 {
 		return Err("Order n khong hop le cho Schnorr".to_string());
 	}
 
-	let k = deterministic_nonce(curve, private_key, message);
+	if public_key == Point::Infinity || !is_on_curve(curve, public_key) {
+		return Err("Public key khong hop le".to_string());
+	}
+
+	if private_key == 0 || private_key >= curve.n {
+		return Err("Private key khong hop le".to_string());
+	}
+
+	let k = deterministic_nonce(curve, private_key, public_key, message);
 	if k == 0 {
 		return Err("Nonce k = 0, khong hop le".to_string());
 	}
 
 	let r = scalar_mul(curve, k, curve.g);
+	if r == Point::Infinity {
+		return Err("Nonce point R khong hop le".to_string());
+	}
+
 	let e = challenge_scalar(r, public_key, message, curve.n)?;
 	let s = mod_n_add(k, mod_n_mul(e, private_key, curve.n), curve.n);
 
@@ -118,7 +141,6 @@ pub fn schnorr_verify(curve: &Curve, public_key: Point, message: &[u8], sig: &Sc
 		return false;
 	}
 
-	// R' = sG - eP = sG + (n - e)P
 	let s_g = scalar_mul(curve, sig.s, curve.g);
 	let neg_e_p = scalar_mul(curve, (curve.n - (sig.e % curve.n)) % curve.n, public_key);
 	let r_prime = add_points(curve, s_g, neg_e_p);
@@ -133,10 +155,15 @@ pub fn schnorr_verify(curve: &Curve, public_key: Point, message: &[u8], sig: &Sc
 
 pub fn demo_schnorr(mssv: &str, full_name: &str, message: &str) -> Result<String, String> {
 	let (curve, keypair) = schnorr_keygen(mssv, full_name)?;
-	let signature = schnorr_sign(&curve, keypair.private_key, keypair.public_key, message.as_bytes())?;
+	let signature = schnorr_sign(
+		&curve,
+		keypair.private_key,
+		keypair.public_key,
+		message.as_bytes(),
+	)?;
 	let verified = schnorr_verify(&curve, keypair.public_key, message.as_bytes(), &signature);
 
-	let report = format!(
+	Ok(format!(
 		"[Schnorr Signature]\nCurve: y^2 = x^3 + {}x + {} (mod {})\nG: {}\nOrder n: {}\n\nPrivate d: {}\nPublic P: {}\nMessage: {}\nSignature (e, s): ({}, {})\nVerify: {}",
 		curve.a,
 		curve.b,
@@ -149,9 +176,7 @@ pub fn demo_schnorr(mssv: &str, full_name: &str, message: &str) -> Result<String
 		signature.e,
 		signature.s,
 		verified
-	);
-
-	Ok(report)
+	))
 }
 
 #[cfg(test)]
@@ -161,7 +186,7 @@ mod tests {
 	#[test]
 	fn schnorr_sign_verify_ok() {
 		let (curve, keypair) = schnorr_keygen("067206006852", "Nhu Pham Quang Manh").unwrap();
-		let msg = b"hello schnorr";
+		let msg: &[u8] = b"hello schnorr".as_slice();
 
 		let sig = schnorr_sign(&curve, keypair.private_key, keypair.public_key, msg).unwrap();
 		assert!(schnorr_verify(&curve, keypair.public_key, msg, &sig));
@@ -170,8 +195,20 @@ mod tests {
 	#[test]
 	fn schnorr_rejects_modified_message() {
 		let (curve, keypair) = schnorr_keygen("067206006852", "Nhu Pham Quang Manh").unwrap();
-		let sig = schnorr_sign(&curve, keypair.private_key, keypair.public_key, b"msg A").unwrap();
+		let msg_a: &[u8] = b"msg A".as_slice();
+		let msg_b: &[u8] = b"msg B".as_slice();
+		let sig = schnorr_sign(&curve, keypair.private_key, keypair.public_key, msg_a).unwrap();
 
-		assert!(!schnorr_verify(&curve, keypair.public_key, b"msg B", &sig));
+		assert!(!schnorr_verify(&curve, keypair.public_key, msg_b, &sig));
+	}
+
+	#[test]
+	fn schnorr_rejects_modified_signature() {
+		let (curve, keypair) = schnorr_keygen("067206006852", "Nhu Pham Quang Manh").unwrap();
+		let msg_a: &[u8] = b"msg A".as_slice();
+		let mut sig = schnorr_sign(&curve, keypair.private_key, keypair.public_key, msg_a).unwrap();
+		sig.s = (sig.s + 1) % curve.n;
+
+		assert!(!schnorr_verify(&curve, keypair.public_key, msg_a, &sig));
 	}
 }

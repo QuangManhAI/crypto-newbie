@@ -19,9 +19,9 @@ fn main() {
 
     let aes_key = "Nhu Pham Quang Manh";
     let plaintext = "Truong Dai hoc Giao Thong Van Tai TPHCM";
-    let mssv = "067206006852";
-    let full_name = "Nhu Pham Quang Manh";
-    let schnorr_message = "Schnorr demo message";
+    let _mssv = "067206006852";
+    let _full_name = "Nhu Pham Quang Manh";
+    let _schnorr_message = "Schnorr demo message";
 
     println!("\n[1] DEMO HE THONG");
 
@@ -50,16 +50,8 @@ fn main() {
     println!("SHA-256: {}", digest);
 
     println!("\n--- ECC Personal Curve Demo ---");
-    match ecc::demo_personal_curve(mssv, full_name) {
-        Ok(report) => println!("{}", report),
-        Err(err) => println!("Loi tao curve: {}", err),
-    }
 
     println!("\n--- Schnorr Signature Demo ---");
-    match schnorr::demo_schnorr(mssv, full_name, schnorr_message) {
-        Ok(report) => println!("{}", report),
-        Err(err) => println!("Loi Schnorr: {}", err),
-    }
 
     println!("\n[2] DANH GIA HIEU NANG");
     println!("Thong so: key='{}', plaintext='{}'", aes_key, plaintext);
@@ -80,72 +72,15 @@ fn main() {
 
     let sha_runs = 20_000u32;
     let sha_start = Instant::now();
-    let mut last_digest = String::new();
     for _ in 0..sha_runs {
-        last_digest = sha256::sha256(perf_plaintext.as_bytes());
+        sha256::sha256(perf_plaintext.as_bytes());
     }
     let sha_total = sha_start.elapsed();
 
-    let ecc_runs = 400u32;
-    let ecc_start = Instant::now();
-    for _ in 0..ecc_runs {
-        let curve = match ecc::build_personal_curve(mssv, full_name) {
-            Ok(c) => c,
-            Err(err) => {
-                println!("ECC benchmark loi tao curve: {}", err);
-                return;
-            }
-        };
-        let d = ecc::derive_private_key(&curve, mssv, full_name);
-        let q = ecc::scalar_mul(&curve, d, curve.g);
-        if !ecc::is_on_curve(&curve, q) {
-            println!("ECC benchmark loi: Q khong nam tren duong cong");
-            return;
-        }
-    }
-    let ecc_total = ecc_start.elapsed();
+    print_perf_row("SHA-256", sha_total, sha_runs);
+    print_perf_row("AES-128 (CTR mode)", aes_total, aes_runs);
 
-    let schnorr_runs = 500u32;
-    let schnorr_start = Instant::now();
-    for _ in 0..schnorr_runs {
-        let (curve, keypair) = match schnorr::schnorr_keygen(mssv, full_name) {
-            Ok(v) => v,
-            Err(err) => {
-                println!("Schnorr benchmark loi keygen: {}", err);
-                return;
-            }
-        };
-        let sig = match schnorr::schnorr_sign(
-            &curve,
-            keypair.private_key,
-            keypair.public_key,
-            schnorr_message.as_bytes(),
-        ) {
-            Ok(s) => s,
-            Err(err) => {
-                println!("Schnorr benchmark loi sign: {}", err);
-                return;
-            }
-        };
-        let ok = schnorr::schnorr_verify(
-            &curve,
-            keypair.public_key,
-            schnorr_message.as_bytes(),
-            &sig,
-        );
-        if !ok {
-            println!("Schnorr benchmark loi: verify false");
-            return;
-        }
-    }
-    let schnorr_total = schnorr_start.elapsed();
+    println!("Schnorr va ECC benchmarks se duoc cap nhat");
 
-    println!("\nKet qua hieu nang:");
-    print_perf_row("AES encrypt+decrypt", aes_total, aes_runs);
-    print_perf_row("SHA-256 hash", sha_total, sha_runs);
-    print_perf_row("ECC key generation", ecc_total, ecc_runs);
-    print_perf_row("Schnorr sign+verify", schnorr_total, schnorr_runs);
-
-    println!("\nDigest mau (SHA-256 tren payload benchmark): {}", last_digest);
     println!("\n================ KET THUC DEMO VA DANH GIA ================");
 }

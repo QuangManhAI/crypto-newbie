@@ -25,7 +25,7 @@ fn maj(x: u32, y: u32, z: u32) -> u32 {
 }
 
 // lấy số nguyên tố để lập hằng số
-fn is_prime(n: u32) -> bool {
+pub fn is_prime(n: u32) -> bool {
     if n < 2 {
         return false;
     }

@@ -26,13 +26,20 @@ fn main() {
     println!("\n[1] DEMO HE THONG");
 
     println!("\n--- AES-128 Demo ---");
-    let cipher_states = aes::aes_128_encrypt(plaintext, aes_key);
+    let initial_counter = [0u8; 16];
+    let cipher_bytes = aes::aes_128_ctr_encrypt(plaintext.as_bytes(), aes_key, initial_counter);
     println!("Key: {}", aes_key);
     println!("Plaintext: {}", plaintext);
-    println!("Cipher blocks:");
-    aes::print_hex_states(&cipher_states);
+    println!("Mode: CTR");
+    println!("Initial counter: {:02X?}", initial_counter);
+    print!("Ciphertext (hex): ");
+    for byte in &cipher_bytes {
+        print!("{:02x}", byte);
+    }
+    println!();
 
-    let decrypted = aes::aes_128_decrypt(cipher_states, aes_key);
+    let decrypted_bytes = aes::aes_128_ctr_decrypt(&cipher_bytes, aes_key, initial_counter);
+    let decrypted = String::from_utf8_lossy(&decrypted_bytes).into_owned();
     println!("Decrypted: {}", decrypted);
 
     let message = plaintext;
@@ -62,9 +69,9 @@ fn main() {
     let aes_runs = 500u32;
     let aes_start = Instant::now();
     for _ in 0..aes_runs {
-        let c = aes::aes_128_encrypt(&perf_plaintext, aes_key);
-        let p = aes::aes_128_decrypt(c, aes_key);
-        if p != perf_plaintext {
+        let c = aes::aes_128_ctr_encrypt(perf_plaintext.as_bytes(), aes_key, initial_counter);
+        let p = aes::aes_128_ctr_decrypt(&c, aes_key, initial_counter);
+        if p != perf_plaintext.as_bytes() {
             println!("AES benchmark loi: decrypt khong khop plaintext");
             return;
         }

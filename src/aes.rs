@@ -1,3 +1,4 @@
+// Sbox dùng cho SubBytes
 const AES_SBOX: [[u8; 16]; 16] = [
     [0x63, 0x7c, 0x77, 0x7b, 0xf2, 0x6b, 0x6f, 0xc5, 0x30, 0x01, 0x67, 0x2b, 0xfe, 0xd7, 0xab, 0x76],
     [0xca, 0x82, 0xc9, 0x7d, 0xfa, 0x59, 0x47, 0xf0, 0xad, 0xd4, 0xa2, 0xaf, 0x9c, 0xa4, 0x72, 0xc0],
@@ -17,30 +18,41 @@ const AES_SBOX: [[u8; 16]; 16] = [
     [0x8c, 0xa1, 0x89, 0x0d, 0xbf, 0xe6, 0x42, 0x68, 0x41, 0x99, 0x2d, 0x0f, 0xb0, 0x54, 0xbb, 0x16],
 ];
 
-const INV_SBOX: [[u8; 16]; 16] = [
-    [0x52, 0x09, 0x6a, 0xd5, 0x30, 0x36, 0xa5, 0x38, 0xbf, 0x40, 0xa3, 0x9e, 0x81, 0xf3, 0xd7, 0xfb],
-    [0x7c, 0xe3, 0x39, 0x82, 0x9b, 0x2f, 0xff, 0x87, 0x34, 0x8e, 0x43, 0x44, 0xc4, 0xde, 0xe9, 0xcb],
-    [0x54, 0x7b, 0x94, 0x32, 0xa6, 0xc2, 0x23, 0x3d, 0xee, 0x4c, 0x95, 0x0b, 0x42, 0xfa, 0xc3, 0x4e],
-    [0x08, 0x2e, 0xa1, 0x66, 0x28, 0xd9, 0x24, 0xb2, 0x76, 0x5b, 0xa2, 0x49, 0x6d, 0x8b, 0xd1, 0x25],
-    [0x72, 0xf8, 0xf6, 0x64, 0x86, 0x68, 0x98, 0x16, 0xd4, 0xa4, 0x5c, 0xcc, 0x5d, 0x65, 0xb6, 0x92],
-    [0x6c, 0x70, 0x48, 0x50, 0xfd, 0xed, 0xb9, 0xda, 0x5e, 0x15, 0x46, 0x57, 0xa7, 0x8d, 0x9d, 0x84],
-    [0x90, 0xd8, 0xab, 0x00, 0x8c, 0xbc, 0xd3, 0x0a, 0xf7, 0xe4, 0x58, 0x05, 0xb8, 0xb3, 0x45, 0x06],
-    [0xd0, 0x2c, 0x1e, 0x8f, 0xca, 0x3f, 0x0f, 0x02, 0xc1, 0xaf, 0xbd, 0x03, 0x01, 0x13, 0x8a, 0x6b],
-    [0x3a, 0x91, 0x11, 0x41, 0x4f, 0x67, 0xdc, 0xea, 0x97, 0xf2, 0xcf, 0xce, 0xf0, 0xb4, 0xe6, 0x73],
-    [0x96, 0xac, 0x74, 0x22, 0xe7, 0xad, 0x35, 0x85, 0xe2, 0xf9, 0x37, 0xe8, 0x1c, 0x75, 0xdf, 0x6e],
-    [0x47, 0xf1, 0x1a, 0x71, 0x1d, 0x29, 0xc5, 0x89, 0x6f, 0xb7, 0x62, 0x0e, 0xaa, 0x18, 0xbe, 0x1b],
-    [0xfc, 0x56, 0x3e, 0x4b, 0xc6, 0xd2, 0x79, 0x20, 0x9a, 0xdb, 0xc0, 0xfe, 0x78, 0xcd, 0x5a, 0xf4],
-    [0x1f, 0xdd, 0xa8, 0x33, 0x88, 0x07, 0xc7, 0x31, 0xb1, 0x12, 0x10, 0x59, 0x27, 0x80, 0xec, 0x5f],
-    [0x60, 0x51, 0x7f, 0xa9, 0x19, 0xb5, 0x4a, 0x0d, 0x2d, 0xe5, 0x7a, 0x9f, 0x93, 0xc9, 0x9c, 0xef],
-    [0xa0, 0xe0, 0x3b, 0x4d, 0xae, 0x2a, 0xf5, 0xb0, 0xc8, 0xeb, 0xbb, 0x3c, 0x83, 0x53, 0x99, 0x61],
-    [0x17, 0x2b, 0x04, 0x7e, 0xba, 0x77, 0xd6, 0x26, 0xe1, 0x69, 0x14, 0x63, 0x55, 0x21, 0x0c, 0x7d],
-];
-
+// RCON dùng cho key expansion
 const RCON: [u8; 11] = [0x00, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1B, 0x36];
 
+// kiểu State để dễ mô tả
+// State là ma trận 4x4 byte, Word là cột của State
 type State = [[u8; 4]; 4];
 type Word = [u8; 4];
 
+// hàm chuyển đổi giữa block hay mảng 16 byte và State 4x4 byte
+fn bytes_to_state(block: &[u8; 16]) -> State {
+    let mut state = [[0u8; 4]; 4];
+
+    for col in 0..4 {
+        for row in 0..4 {
+            state[row][col] = block[col * 4 + row];
+        }
+    }
+
+    state
+}
+
+// Hàm đổi ngược state thành mảng 16 byte, dùng để lấy keystream sau khi mã hóa counter
+fn state_to_bytes(state: &State) -> [u8; 16] {
+    let mut block = [0u8; 16];
+
+    for col in 0..4 {
+        for row in 0..4 {
+            block[col * 4 + row] = state[row][col];
+        }
+    }
+
+    block
+}
+
+// Từ khoá ban đầu, chuyển thành State đầu tiên cho key expansion
 fn init_first_key(string: &str) -> State {
     let key_in_u8 = string.as_bytes();
 
@@ -55,20 +67,23 @@ fn init_first_key(string: &str) -> State {
     first_key
 }
 
+// phép rotation của Word, dùng trong key expansion
 fn rot_word(word: Word) -> Word {
     [(word)[1], word[2], word[3], word[0]]
 }
 
+// phép subWord để thay giá trị của Word bằng Sbox, dùng trong key expansion
 fn sub_word(word: Word) -> Word {
     let mut result = [0u8; 4];
     for i in 0..4 {
-        let r = (word[i]>>4) as usize;
-        let c = (word[i] & 0x0F) as usize;
+        let r = (word[i]>>4) as usize; // lấy 4 bit cao làm chỉ số hàng
+        let c = (word[i] & 0x0F) as usize; // lấy 4 bit thấp làm chỉ số cột
         result[i] = AES_SBOX[r][c];
     }
     result
 }
 
+// hàm kết hợp rotation và subWord, và thêm RCON, dùng trong key expansion
 fn combine_srword(_word: Word, round: usize) -> Word {
     let mut word = rot_word(_word);
 
@@ -79,6 +94,7 @@ fn combine_srword(_word: Word, round: usize) -> Word {
     word
 }
 
+// key expansion để tạo toàn bộ khoá cho các round của AES
 fn key_expansion(first_key: State) -> [State; 11] {
     let mut all_keys: [State; 11] = [[[0u8; 4]; 4]; 11];
 
@@ -107,28 +123,8 @@ fn key_expansion(first_key: State) -> [State; 11] {
     all_keys
 }
 
-fn prepare_input_to_states(input: &str) -> Vec<State> {
-    let mut bytes = input.as_bytes().to_vec();
-
-    let padding_len = 16 - (bytes.len() % 16);
-
-    for _ in 0..padding_len{
-        bytes.push(padding_len as u8);
-    }
-
-    let mut states = Vec::new();
-    for chunk in bytes.chunks(16) {
-        let mut state = [[0u8; 4]; 4];
-        for col in 0..4 {
-            for row in 0..4 {
-                state[row][col] = chunk[col * 4 + row];
-            }
-        }
-        states.push(state);
-    }
-    states
-}
-
+// Các bước của AES: SubBytes, ShiftRows, MixColumns, AddRoundKey
+// subytes là bước thay thế mỗi byte bằng giá trị tương ứng trong Sbox
 fn sub_bytes(state: &mut State) {
     for row in 0..4 {
         for col in 0..4 {
@@ -141,6 +137,7 @@ fn sub_bytes(state: &mut State) {
     }
 }
 
+// add round key là bước XOR mỗi byte của state với byte tương ứng của round key
 fn add_round_key(state: &mut State, round_key: State) {
     for col in 0..4 {
         for row in 0..4 {
@@ -149,6 +146,7 @@ fn add_round_key(state: &mut State, round_key: State) {
     }
 }
 
+// shiftrow là bước dịch sang trái mỗi hàng của State.
 fn shift_rows(state: &mut State) {
     let row_1 = [state[1][1], state[1][2], state[1][3], state[1][0]];
     let row_2 = [state[2][2], state[2][3], state[2][0], state[2][1]];
@@ -159,6 +157,9 @@ fn shift_rows(state: &mut State) {
     state[3] = row_3;
 }
 
+// xtime là phép nhân 02*x. theo công thức trong Galios Feild 
+// thực chất 02*x là x*x và chính là phép dịch bit sang trái 1 bit.
+// có ngoại lệ với th vượt 2^8.
 fn xtime(x: u8) -> u8{
     if (x & 0x80) != 0 {
         (x << 1) ^ 0x1B
@@ -167,6 +168,7 @@ fn xtime(x: u8) -> u8{
     }
 }
 
+// mixcolumns là bước trộn lẫn các cột của State.
 fn mix_columns(state: &mut State) {
     for c in 0..4 {
         let s0 = state[0][c];
@@ -181,6 +183,7 @@ fn mix_columns(state: &mut State) {
     }
 }
 
+// Kết hợp tất cả các bước để mã hoá. dùng trong CTR mode để mã hoá counter và tạo keystream.
 fn encrypt_block(mut state: State, all_keys: [State; 11]) -> State{
     add_round_key(&mut state, all_keys[0]);
 
@@ -198,195 +201,85 @@ fn encrypt_block(mut state: State, all_keys: [State; 11]) -> State{
     state
 }
 
-pub fn aes_128_encrypt(input: &str, key_str: &str) -> Vec<State> {
+// hàm tăng counter lên 1, dùng trong CTR mode để tạo keystream khác nhau cho mỗi block
+fn increment_counter(counter: &mut [u8; 16]) {
+    for byte in counter.iter_mut().rev() {
+        let (next, overflowed) = byte.overflowing_add(1);
+        *byte = next;
+        if !overflowed {
+            break;
+        }
+    }
+}
+
+// hàm chính để kết hợp mã hoá AES và CTR mode nhằm mã hoá song song. 
+pub fn aes_128_ctr_encrypt(input: &[u8], key_str: &str, initial_counter: [u8; 16]) -> Vec<u8> {
     let first_key = init_first_key(key_str);
     let all_keys = key_expansion(first_key);
 
-    let blocks = prepare_input_to_states(input);
+    let mut counter = initial_counter;
+    let mut output = Vec::with_capacity(input.len());
 
-    let mut cipher_text_states = Vec::new();
+    for chunk in input.chunks(16) {
+        let counter_state = bytes_to_state(&counter);
+        let keystream_state = encrypt_block(counter_state, all_keys);
+        let keystream = state_to_bytes(&keystream_state);
 
-    for state in blocks {
-        let encrypted_state = encrypt_block(state, all_keys);
-        cipher_text_states.push(encrypted_state);
-    }
-
-    cipher_text_states
-}
-
-pub fn print_hex_states(states: &Vec<State>) {
-    for (i, state) in states.iter().enumerate() {
-        println!("\nBlock {:02} ──────────────────────────", i);
-
-        println!("┌────────┬────────┬────────┬────────┐");
-
-        for row in 0..4 {
-            print!("│ ");
-            for col in 0..4 {
-                print!("{:02X}     │ ", state[row][col]);
-            }
-            println!(); 
-
-            if row < 3 {
-                println!("├────────┼────────┼────────┼────────┤");
-            }
+        for (i, &plain_byte) in chunk.iter().enumerate() {
+            output.push(plain_byte ^ keystream[i]);
         }
-        println!("└────────┴────────┴────────┴────────┘");
-    }
-}
 
-fn inv_sub_bytes(state: &mut State) {
-    for row in 0..4 {
-        for col in 0..4 {
-            let value = state[row][col];
-            let r = (value >> 4) as usize;
-            let c = (value & 0x0F) as usize;
-
-            state[row][col] = INV_SBOX[r][c];
-        }
-    }
-}
-
-fn inv_shift_rows(state: &mut State) {
-
-    let row_1 = [state[1][3], state[1][0], state[1][1], state[1][2]];
-    
-    let row_2 = [state[2][2], state[2][3], state[2][0], state[2][1]];
-    
-    let row_3 = [state[3][1], state[3][2], state[3][3], state[3][0]];
-
-    state[1] = row_1;
-    state[2] = row_2;
-    state[3] = row_3;
-}
-
-fn mul(a: u8, mut b: u8) -> u8 {
-    let mut res = 0;
-    let mut temp = a;
-    while b > 0 {
-        if (b & 1) != 0 {
-            res ^= temp;
-        }
-        temp = xtime(temp);
-        b >>= 1;
-    }
-    res
-}
-
-fn inv_mix_columns(state: &mut State) {
-    for c in 0..4 {
-        let s0 = state[0][c];
-        let s1 = state[1][c];
-        let s2 = state[2][c];
-        let s3 = state[3][c];
-
-        state[0][c] = mul(s0, 0x0e) ^ mul(s1, 0x0b) ^ mul(s2, 0x0d) ^ mul(s3, 0x09);
-        state[1][c] = mul(s0, 0x09) ^ mul(s1, 0x0e) ^ mul(s2, 0x0b) ^ mul(s3, 0x0d);
-        state[2][c] = mul(s0, 0x0d) ^ mul(s1, 0x09) ^ mul(s2, 0x0e) ^ mul(s3, 0x0b);
-        state[3][c] = mul(s0, 0x0b) ^ mul(s1, 0x0d) ^ mul(s2, 0x09) ^ mul(s3, 0x0e);
-    }
-}
-
-fn decrypt_block(mut state: State, all_keys: [State; 11]) -> State {
-    add_round_key(&mut state, all_keys[10]);
-    inv_shift_rows(&mut state);
-    inv_sub_bytes(&mut state);
-
-    for i in (1..10).rev() {
-        add_round_key(&mut state, all_keys[i]);
-        inv_mix_columns(&mut state);
-        inv_shift_rows(&mut state);
-        inv_sub_bytes(&mut state);
+        increment_counter(&mut counter);
     }
 
-    add_round_key(&mut state, all_keys[0]);
-
-    state
+    output
 }
 
-fn unpad(mut bytes: Vec<u8>) -> Vec<u8> {
-    if bytes.is_empty() {
-        return bytes;
-    }
-
-    let pad_len = *bytes.last().unwrap() as usize;
-
-    if pad_len == 0 || pad_len > 16 || pad_len > bytes.len() {
-        return bytes; 
-    }
-
-    let new_len = bytes.len() - pad_len;
-    bytes.truncate(new_len);
-    
-    bytes
+// giải mã AES CTR mode chỉ cần mã hoá lại với cùng counter và key, vì CTR mode là stream cipher.
+pub fn aes_128_ctr_decrypt(ciphertext: &[u8], key_str: &str, initial_counter: [u8; 16]) -> Vec<u8> {
+    aes_128_ctr_encrypt(ciphertext, key_str, initial_counter)
 }
 
-pub fn aes_128_decrypt(cipher_states: Vec<State>, key_str: &str) -> String {
-    let first_key = init_first_key(key_str);
-    let all_keys = key_expansion(first_key);
-    let mut plain_bytes = Vec::new();
 
-    for state in cipher_states {
-        let decrypted_state = decrypt_block(state, all_keys);
-        
-        for col in 0..4 {
-            for row in 0..4 {
-                plain_bytes.push(decrypted_state[row][col]);
-            }
-        }
-    }
-
-    let unpadded_bytes = unpad(plain_bytes);
-
-    String::from_utf8_lossy(&unpadded_bytes).into_owned()
-}
-
+// unit test 
 #[cfg(test)]
 mod tests {
-    use super::{aes_128_decrypt, aes_128_encrypt};
+    use super::{aes_128_ctr_decrypt, aes_128_ctr_encrypt};
 
     #[test]
-    fn aes_round_trip_single_block() {
-        let key = "Thats my Kung Fu";
-        let plaintext = "hello aes";
-
-        let cipher = aes_128_encrypt(plaintext, key);
-        let decrypted = aes_128_decrypt(cipher, key);
-
-        assert_eq!(decrypted, plaintext);
-    }
-
-    #[test]
-    fn aes_round_trip_multi_block() {
+    fn aes_ctr_round_trip() {
         let key = "Nhu Pham Quang Manh";
         let plaintext = "Truong Dai hoc Giao Thong Van Tai TPHCM";
+        let initial_counter = [0u8; 16];
 
-        let cipher = aes_128_encrypt(plaintext, key);
-        let decrypted = aes_128_decrypt(cipher, key);
+        let cipher = aes_128_ctr_encrypt(plaintext.as_bytes(), key, initial_counter);
+        let decrypted = aes_128_ctr_decrypt(&cipher, key, initial_counter);
 
-        assert_eq!(decrypted, plaintext);
+        assert_eq!(decrypted, plaintext.as_bytes());
     }
 
     #[test]
-    fn aes_encrypt_is_deterministic_with_same_key_and_input() {
+    fn aes_ctr_deterministic_with_same_counter() {
         let key = "Thats my Kung Fu";
-        let plaintext = "same input";
+        let plaintext = b"same input";
+        let initial_counter = [0u8; 16];
 
-        let c1 = aes_128_encrypt(plaintext, key);
-        let c2 = aes_128_encrypt(plaintext, key);
+        let c1 = aes_128_ctr_encrypt(plaintext.as_ref(), key, initial_counter);
+        let c2 = aes_128_ctr_encrypt(plaintext.as_ref(), key, initial_counter);
 
         assert_eq!(c1, c2);
     }
 
     #[test]
-    fn aes_decrypt_with_wrong_key_does_not_match_plaintext() {
+    fn aes_ctr_wrong_key_fails_round_trip() {
         let key_ok = "Thats my Kung Fu";
         let key_wrong = "Nhu Pham Quang Manh";
-        let plaintext = "secret message";
+        let plaintext = b"secret message";
+        let initial_counter = [0u8; 16];
 
-        let cipher = aes_128_encrypt(plaintext, key_ok);
-        let decrypted_wrong = aes_128_decrypt(cipher, key_wrong);
+        let cipher = aes_128_ctr_encrypt(plaintext.as_ref(), key_ok, initial_counter);
+        let decrypted_wrong = aes_128_ctr_decrypt(&cipher, key_wrong, initial_counter);
 
-        assert_ne!(decrypted_wrong, plaintext);
+        assert_ne!(decrypted_wrong, plaintext.as_ref());
     }
 }

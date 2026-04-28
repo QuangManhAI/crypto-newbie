@@ -1,3 +1,5 @@
+// thiết lập toàn bộ công thức và hằng số
+// sigma0, sigma1, big_sigma0, big_sigma1, ch, maj
 fn big_sigma_0(x: u32) -> u32 {
     x.rotate_right(2) ^ x.rotate_right(13) ^ x.rotate_right(22)
 }
@@ -22,6 +24,7 @@ fn maj(x: u32, y: u32, z: u32) -> u32 {
     (x & y) ^ (x & z) ^ (y & z)
 }
 
+// lấy số nguyên tố để lập hằng số
 fn is_prime(n: u32) -> bool {
     if n < 2 {
         return false;
@@ -57,6 +60,7 @@ fn get_n_primes(n: usize) -> Vec<u32> {
     primes
 }
 
+// tính hằng số khởi tạo và hằng số round từ số nguyên tố
 fn compute_initial_hash() -> [u32; 8] {
     let primes = get_n_primes(8);
     let mut h = [0u32; 8];
@@ -70,6 +74,7 @@ fn compute_initial_hash() -> [u32; 8] {
     h
 }
 
+// hằng số round K, dùng trong bước nén của thuật toán
 fn compute_k_constants() -> [u32; 64] {
     let primes = get_n_primes(64);
     let mut k = [0u32; 64];
@@ -83,6 +88,8 @@ fn compute_k_constants() -> [u32; 64] {
     k
 }
 
+// bước padding vào thông điệp sắp băm 
+// padding chuẩn Merkle Damgard
 fn pad_message(message: &[u8]) -> Vec<u8> {
     let mut padded = message.to_vec();
 
@@ -118,6 +125,7 @@ fn parse_into_blocks(full_padded_message: &[u8]) -> Vec<[u32; 16]> {
         .collect()
 }
 
+// hàm tổng hợp để tính băm của một thông điệp, trả về chuỗi hex của digest
 fn preprocess(message: &[u8]) -> Vec<[u32; 16]> {
     let original_bit_len = (message.len() as u64) * 8;
     let padded = pad_message(message);
@@ -125,6 +133,7 @@ fn preprocess(message: &[u8]) -> Vec<[u32; 16]> {
     parse_into_blocks(&complete_message)
 }
 
+// mở rộng message schedule từ 16 word thành 64 word, dùng trong bước nén của thuật toán
 fn extend_message_schedule(m_block: &[u32; 16]) -> [u32; 64] {
     let mut w = [0u32; 64];
 
@@ -140,6 +149,7 @@ fn extend_message_schedule(m_block: &[u32; 16]) -> [u32; 64] {
     w
 }
 
+// hàm nén chính của thuật toán, cập nhật hash hiện tại với block message và hằng số round
 fn compress_block(w: &[u32; 64], k: &[u32; 64], h_current: &mut [u32; 8]) {
     let mut a = h_current[0];
     let mut b = h_current[1];
@@ -179,6 +189,7 @@ fn compress_block(w: &[u32; 64], k: &[u32; 64], h_current: &mut [u32; 8]) {
     h_current[7] = h_current[7].wrapping_add(h);
 }
 
+// hàm tổng hợp, khởi tạo hằng số, nén tất cả các block, trả về chuỗi hex của digest
 pub fn sha256(message: &[u8]) -> String {
     let h_init = compute_initial_hash();
     let k_constants = compute_k_constants();
@@ -194,6 +205,7 @@ pub fn sha256(message: &[u8]) -> String {
     h_current.iter().map(|x| format!("{:08x}", x)).collect()
 }
 
+// unit test 
 #[cfg(test)]
 mod tests {
     use super::sha256;
